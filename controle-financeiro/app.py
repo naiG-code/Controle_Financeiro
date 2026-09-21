@@ -1,12 +1,48 @@
 """Controle Financeiro Pessoal - Etapa 1: registrar transação, ver saldo, listar transações."""
+import os
 from datetime import date
 
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 import database as db
 
+load_dotenv()
+
 st.set_page_config(page_title="Controle Financeiro", page_icon="💰", layout="centered")
+
+
+def obter_credencial(nome):
+    try:
+        if nome in st.secrets:
+            return st.secrets[nome]
+    except Exception:
+        pass  # sem arquivo de secrets configurado (ex: rodando só local) — tudo bem
+    return os.environ.get(nome)
+
+
+def verificar_senha():
+    senha_correta = obter_credencial("APP_PASSWORD")
+    if not senha_correta:
+        return True  # sem senha configurada (ex: uso local) — não bloqueia
+
+    if st.session_state.get("autenticado"):
+        return True
+
+    st.title("💰 Controle Financeiro Pessoal")
+    senha_digitada = st.text_input("Senha de acesso", type="password")
+    if st.button("Entrar"):
+        if senha_digitada == senha_correta:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Senha incorreta.")
+    return False
+
+
+if not verificar_senha():
+    st.stop()
 
 NOMES_MESES = [
     "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -23,7 +59,10 @@ def formatar_mes(mes):
 
 @st.cache_resource
 def get_conn():
-    conn = db.conectar()
+    conn = db.conectar(
+        turso_url=obter_credencial("TURSO_DATABASE_URL"),
+        turso_token=obter_credencial("TURSO_AUTH_TOKEN"),
+    )
     db.inicializar_banco(conn)
     return conn
 

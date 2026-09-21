@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .venv/
 financas.db
+.env
+.streamlit/secrets.toml

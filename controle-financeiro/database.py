@@ -1,4 +1,4 @@
-"""Acesso ao banco de dados SQLite e cálculos financeiros."""
+"""Acesso ao banco de dados SQLite (local) ou Turso/libSQL (remoto) e cálculos financeiros."""
 import calendar
 import sqlite3
 from pathlib import Path
@@ -20,10 +20,50 @@ CATEGORIAS_INICIAIS = [
 ]
 
 
-def conectar(db_path=DB_PATH):
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+class _TursoCursor:
+    def __init__(self, result_set):
+        self._rows = list(result_set.rows)
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+class _TursoConnection:
+    """Conexão remota (Turso/libSQL) com uma API parecida com a do sqlite3."""
+
+    def __init__(self, url, auth_token):
+        import libsql_client
+
+        url_http = url.replace("libsql://", "https://")
+        self._client = libsql_client.create_client_sync(url=url_http, auth_token=auth_token)
+
+    def execute(self, sql, params=()):
+        resultado = self._client.execute(sql, list(params))
+        return _TursoCursor(resultado)
+
+    def executescript(self, script):
+        for comando in script.split(";"):
+            comando = comando.strip()
+            if comando:
+                self._client.execute(comando)
+
+    def commit(self):
+        pass  # cada comando já é gravado imediatamente via HTTP
+
+
+def conectar(db_path=DB_PATH, turso_url=None, turso_token=None):
+    if turso_url and turso_token:
+        conn = _TursoConnection(turso_url, turso_token)
+    else:
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.row_factory = sqlite3.Row
     return conn
 
 
